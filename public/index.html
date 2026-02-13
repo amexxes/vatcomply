@@ -87,3 +87,363 @@
 
       .progressWrap{
         margin-top:12px;
+        border:1px solid var(--line);
+        background: rgba(0,0,0,.25);
+        border-radius:999px;
+        overflow:hidden;
+        height:10px;
+        display:none;
+      }
+      .progressBar{
+        height:100%;
+        width:0%;
+        background: linear-gradient(90deg, rgba(110,168,254,.35), rgba(110,168,254,.95));
+        transition: width .20s ease;
+      }
+      .progressText{
+        margin-top:6px;
+        color: var(--muted);
+        font-size:12px;
+        display:none;
+      }
+
+      .tableCard{ margin-top:16px; padding:0; overflow:hidden; }
+      table{
+        width:100%;
+        border-collapse:separate;
+        border-spacing:0;
+        font-size:13px;
+      }
+      thead th{
+        position:sticky;
+        top:0;
+        background: rgba(18,26,51,.95);
+        backdrop-filter: blur(6px);
+        border-bottom:1px solid var(--line);
+        padding:10px 10px;
+        text-align:left;
+        color: var(--muted);
+        font-weight:700;
+        cursor:pointer;
+        user-select:none;
+        white-space:nowrap;
+      }
+      thead th:hover{ color: var(--text); }
+      tbody td{
+        border-bottom:1px solid var(--line);
+        padding:10px 10px;
+        vertical-align:top;
+      }
+      tbody tr:hover{ background: rgba(255,255,255,.03); }
+
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:3px 10px;
+        border-radius:999px;
+        border:1px solid var(--line);
+        font-weight:700;
+        font-size:12px;
+        white-space:nowrap;
+      }
+      .pill.ok{ border-color: rgba(57,217,138,.35); background: rgba(57,217,138,.12); color: var(--ok); }
+      .pill.bad{ border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.10); color: var(--bad); }
+      .pill.warn{ border-color: rgba(255,209,102,.35); background: rgba(255,209,102,.10); color: var(--warn); }
+
+      .rowOk{ box-shadow: inset 4px 0 0 rgba(57,217,138,.65); }
+      .rowBad{ box-shadow: inset 4px 0 0 rgba(255,107,107,.65); }
+
+      .muted{ color: var(--muted); }
+      .small{ font-size:12px; }
+      .nowrap{ white-space:nowrap; }
+
+      @media (max-width: 820px){
+        .meta{ width:100%; margin-left:0; }
+        thead th{ position:static; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>VAT validation (VATcomply)</h1>
+        <p class="hint">
+          Vul VAT-nummers in <b>met</b> country prefix. Elke regel = één VAT.<br/>
+          Voorbeelden: <code>NL002065538B01</code>, <code>EL094395030</code>, <code>DE123456789</code>, <code>XI123456789</code>
+        </p>
+
+        <textarea id="vats" placeholder="NL002065538B01&#10;EL094395030"></textarea>
+
+        <div class="controls">
+          <button class="btn" id="btnRun">Validate</button>
+
+          <input class="field" id="search" placeholder="Filter: VAT / naam / adres / country..." style="min-width:260px;" />
+          <select id="filterValid">
+            <option value="all">All</option>
+            <option value="valid">Valid</option>
+            <option value="invalid">Invalid</option>
+            <option value="error">Error</option>
+          </select>
+          <select id="filterSource">
+            <option value="all">All sources</option>
+          </select>
+
+          <div class="meta">
+            <span id="countText">0 rows</span>
+            <span class="muted small" id="sortText"></span>
+          </div>
+        </div>
+
+        <div class="progressWrap" id="progressWrap"><div class="progressBar" id="progressBar"></div></div>
+        <div class="progressText" id="progressText"></div>
+      </div>
+
+      <div class="card tableCard" id="tableCard" style="display:none;">
+        <div style="overflow:auto; max-height: 520px;">
+          <table id="tbl"></table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      const columns = [
+        { key: "input", label: "input" },
+        { key: "source", label: "source" },
+        { key: "valid", label: "valid" },
+        { key: "vat_number", label: "vat_number" },
+        { key: "country_code", label: "country_code" },
+        { key: "name", label: "name" },
+        { key: "address", label: "address" },
+        { key: "error", label: "error" },
+        { key: "status", label: "status" }
+      ];
+
+      let allRows = [];
+      let sortState = { key: "input", dir: "asc" };
+
+      function parseLines(text) {
+        return text
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(l => l.length > 0);
+      }
+
+      function normalizeText(v) {
+        return String(v ?? "").toLowerCase();
+      }
+
+      function getRowStatus(row){
+        if (row.error) return "error";
+        if (row.valid === true) return "valid";
+        if (row.valid === false) return "invalid";
+        return "unknown";
+      }
+
+      function pillForRow(row){
+        const st = getRowStatus(row);
+        if (st === "valid") return `<span class="pill ok">valid</span>`;
+        if (st === "invalid") return `<span class="pill bad">invalid</span>`;
+        if (st === "error") return `<span class="pill warn">error</span>`;
+        return `<span class="pill">—</span>`;
+      }
+
+      function valueForSort(v){
+        if (v === true) return 1;
+        if (v === false) return 0;
+        return String(v ?? "").toLowerCase();
+      }
+
+      function applyFiltersAndSort(){
+        const q = normalizeText($("search").value);
+        const fv = $("filterValid").value;
+        const fs = $("filterSource").value;
+
+        let rows = allRows.slice();
+
+        // filter: valid/error
+        rows = rows.filter(r => {
+          const st = getRowStatus(r);
+          if (fv === "all") return true;
+          return st === fv;
+        });
+
+        // filter: source
+        rows = rows.filter(r => {
+          if (fs === "all") return true;
+          return String(r.source || "") === fs;
+        });
+
+        // search across key fields
+        if (q) {
+          rows = rows.filter(r => {
+            const hay = [
+              r.input, r.vat_number, r.country_code, r.name, r.address, r.source, r.error
+            ].map(normalizeText).join(" | ");
+            return hay.includes(q);
+          });
+        }
+
+        // sort
+        const { key, dir } = sortState;
+        rows.sort((a,b) => {
+          const av = valueForSort(a[key]);
+          const bv = valueForSort(b[key]);
+          if (av < bv) return dir === "asc" ? -1 : 1;
+          if (av > bv) return dir === "asc" ? 1 : -1;
+          return 0;
+        });
+
+        $("countText").textContent = `${rows.length} rows`;
+        $("sortText").textContent = `sort: ${sortState.key} (${sortState.dir})`;
+
+        renderTable(rows);
+      }
+
+      function renderTable(rows){
+        $("tableCard").style.display = "block";
+
+        const thead = `
+          <thead>
+            <tr>
+              ${columns.map(c => {
+                const arrow = (sortState.key === c.key) ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+                return `<th data-key="${c.key}">${c.label}${arrow}</th>`;
+              }).join("")}
+            </tr>
+          </thead>
+        `;
+
+        const tbody = `
+          <tbody>
+            ${rows.map(r => {
+              const st = getRowStatus(r);
+              const rowClass = st === "valid" ? "rowOk" : (st === "invalid" || st === "error") ? "rowBad" : "";
+              return `
+                <tr class="${rowClass}">
+                  <td class="nowrap">${escapeHtml(r.input ?? "")}</td>
+                  <td class="nowrap">${escapeHtml(r.source ?? "")}</td>
+                  <td>${pillForRow(r)}</td>
+                  <td class="nowrap">${escapeHtml(r.vat_number ?? "")}</td>
+                  <td class="nowrap">${escapeHtml(r.country_code ?? "")}</td>
+                  <td>${escapeHtml(r.name ?? "")}</td>
+                  <td>${escapeHtml(r.address ?? "")}</td>
+                  <td class="nowrap">${escapeHtml(r.error ?? "")}</td>
+                  <td class="nowrap">${escapeHtml(r.status ?? "")}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        `;
+
+        $("tbl").innerHTML = thead + tbody;
+
+        // click sort
+        $("tbl").querySelectorAll("thead th").forEach(th => {
+          th.addEventListener("click", () => {
+            const key = th.getAttribute("data-key");
+            if (!key) return;
+            if (sortState.key === key) {
+              sortState.dir = (sortState.dir === "asc") ? "desc" : "asc";
+            } else {
+              sortState.key = key;
+              sortState.dir = "asc";
+            }
+            applyFiltersAndSort();
+          });
+        });
+      }
+
+      function escapeHtml(str){
+        return String(str)
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function setProgress(current, total){
+        const pct = total ? Math.round((current / total) * 100) : 0;
+        $("progressWrap").style.display = "block";
+        $("progressText").style.display = "block";
+        $("progressBar").style.width = `${pct}%`;
+        $("progressText").textContent = `Progress: ${current}/${total} (${pct}%)`;
+      }
+
+      function resetProgress(){
+        $("progressWrap").style.display = "none";
+        $("progressText").style.display = "none";
+        $("progressBar").style.width = "0%";
+        $("progressText").textContent = "";
+      }
+
+      async function validateOne(vat){
+        // re-use existing endpoint with a single-item batch
+        const res = await fetch("/api/validate-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vat_numbers: [vat] })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data.results || !data.results[0]) {
+          return { input: vat, error: "NO_RESULT" };
+        }
+        return data.results[0];
+      }
+
+      async function run(){
+        const vats = parseLines($("vats").value);
+        if (!vats.length) return;
+
+        $("btnRun").disabled = true;
+        $("btnRun").textContent = "Running…";
+        allRows = [];
+        $("tableCard").style.display = "none";
+
+        // reset filters
+        $("filterSource").innerHTML = `<option value="all">All sources</option>`;
+        resetProgress();
+
+        const total = vats.length;
+        setProgress(0, total);
+
+        for (let i = 0; i < vats.length; i++){
+          const vat = vats[i];
+
+          // update progress before/after each call
+          setProgress(i, total);
+          let row;
+          try {
+            row = await validateOne(vat);
+          } catch (e) {
+            row = { input: vat, error: "REQUEST_FAILED", status: "" };
+          }
+          allRows.push(row);
+          setProgress(i + 1, total);
+
+          // update source filter options on the fly
+          const sources = new Set(allRows.map(r => r.source).filter(Boolean));
+          const current = $("filterSource").value;
+          $("filterSource").innerHTML =
+            `<option value="all">All sources</option>` +
+            Array.from(sources).sort().map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+          if (Array.from(sources).includes(current) || current === "all") $("filterSource").value = current;
+
+          applyFiltersAndSort();
+        }
+
+        $("btnRun").disabled = false;
+        $("btnRun").textContent = "Validate";
+      }
+
+      $("btnRun").addEventListener("click", run);
+      $("search").addEventListener("input", applyFiltersAndSort);
+      $("filterValid").addEventListener("change", applyFiltersAndSort);
+      $("filterSource").addEventListener("change", applyFiltersAndSort);
+    </script>
+  </body>
+</html>
