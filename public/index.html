@@ -1,42 +1,56 @@
-
 <!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>VAT Validation</title>
-  <style>
-    body { font-family: Arial; margin: 40px; max-width: 700px; }
-    input, button { padding: 8px; margin: 5px 0; }
-    pre { background: #f4f4f4; padding: 12px; border-radius: 8px; }
-  </style>
-</head>
-<body>
-  <h2>VAT Validation (VATcomply)</h2>
-  <div>
-    <label>Country Code (2 letters)</label><br/>
-    <input id="country" placeholder="NL" maxlength="2"/><br/>
-    <label>VAT Number (without country)</label><br/>
-    <input id="vat" placeholder="123456789B01"/><br/>
-    <button onclick="validate()">Validate</button>
-  </div>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VAT Validation</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; max-width: 900px; }
+      textarea { width: 100%; height: 180px; padding: 10px; font-size: 14px; }
+      button { padding: 10px 14px; font-size: 14px; cursor: pointer; margin-top: 10px; }
+      pre { background: #f4f4f4; padding: 12px; border-radius: 8px; overflow: auto; }
+      .hint { color: #444; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h2>VAT validation (VATcomply)</h2>
 
-  <h3>Result</h3>
-  <pre id="result">{}</pre>
+    <p class="hint">
+      Vul VAT-nummers in <b>met</b> country prefix. Elke regel = één VAT.<br/>
+      Voorbeelden: <code>NL002065538B01</code>, <code>EL094395030</code>, <code>DE123456789</code>, <code>XI123456789</code>
+    </p>
 
-  <script>
-    async function validate() {
-      const country = document.getElementById("country").value;
-      const vat = document.getElementById("vat").value;
+    <textarea id="vats" placeholder="NL002065538B01&#10;EL094395030"></textarea>
+    <br />
+    <button id="btn">Validate</button>
 
-      const res = await fetch("/api/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ country, vat })
-      });
+    <h3>Result</h3>
+    <pre id="result">{}</pre>
 
-      const data = await res.json();
-      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
-    }
-  </script>
-</body>
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function parseLines(text) {
+        return text
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(l => l.length > 0);
+      }
+
+      async function validateBatch() {
+        const vat_numbers = parseLines($("vats").value);
+
+        const res = await fetch("/api/validate-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vat_numbers })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        $("result").textContent = JSON.stringify(data, null, 2);
+      }
+
+      $("btn").addEventListener("click", validateBatch);
+    </script>
+  </body>
 </html>
