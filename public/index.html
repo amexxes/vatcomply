@@ -24,33 +24,76 @@
     <br />
     <button id="btn">Validate</button>
 
-    <h3>Result</h3>
-    <pre id="result">{}</pre>
+<h3>Result</h3>
+<div id="result"></div>
 
-    <script>
-      const $ = (id) => document.getElementById(id);
 
-      function parseLines(text) {
-        return text
-          .split(/\r?\n/)
-          .map(l => l.trim())
-          .filter(l => l.length > 0);
-      }
+<script>
+  const $ = (id) => document.getElementById(id);
 
-      async function validateBatch() {
-        const vat_numbers = parseLines($("vats").value);
+  function parseLines(text) {
+    return text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+  }
 
-        const res = await fetch("/api/validate-batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vat_numbers })
-        });
+  function renderTable(data) {
+    if (!data.results || !data.results.length) {
+      $("result").innerHTML = "<p>No results</p>";
+      return;
+    }
 
-        const data = await res.json().catch(() => ({}));
-        $("result").textContent = JSON.stringify(data, null, 2);
-      }
+    const columns = [
+      "input",
+      "source",
+      "valid",
+      "vat_number",
+      "name",
+      "address",
+      "country_code",
+      "error",
+      "status"
+    ];
 
-      $("btn").addEventListener("click", validateBatch);
-    </script>
+    let html = "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse; font-size:13px;'>";
+    html += "<thead><tr>";
+
+    columns.forEach(col => {
+      html += `<th>${col}</th>`;
+    });
+
+    html += "</tr></thead><tbody>";
+
+    data.results.forEach(row => {
+      html += "<tr>";
+      columns.forEach(col => {
+        let value = row[col] ?? "";
+        if (typeof value === "boolean") value = value ? "true" : "false";
+        html += `<td>${value}</td>`;
+      });
+      html += "</tr>";
+    });
+
+    html += "</tbody></table>";
+
+    $("result").innerHTML = html;
+  }
+
+  async function validateBatch() {
+    const vat_numbers = parseLines($("vats").value);
+
+    const res = await fetch("/api/validate-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vat_numbers })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    renderTable(data);
+  }
+
+  $("btn").addEventListener("click", validateBatch);
+</script>
   </body>
 </html>
