@@ -1,0 +1,42 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>VAT Validation</title>
+  <style>
+    body { font-family: Arial; margin: 40px; max-width: 700px; }
+    input, button { padding: 8px; margin: 5px 0; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h2>VAT Validation (VATcomply)</h2>
+  <div>
+    <label>Country Code (2 letters)</label><br/>
+    <input id="country" placeholder="NL" maxlength="2"/><br/>
+    <label>VAT Number (without country)</label><br/>
+    <input id="vat" placeholder="123456789B01"/><br/>
+    <button onclick="validate()">Validate</button>
+  </div>
+
+  <h3>Result</h3>
+  <pre id="result">{}</pre>
+
+  <script>
+    async function validate() {
+      const country = document.getElementById("country").value;
+      const vat = document.getElementById("vat").value;
+
+      const res = await fetch("/api/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country, vat })
+      });
+
+      const data = await res.json();
+      document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>
