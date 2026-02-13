@@ -39,7 +39,17 @@ app.post("/api/validate", async (req, res) => {
       return res.json({ source: "cache", ...JSON.parse(row.response_json) });
     }
 
-    const vatNumber = `${country}${vat}`;
+    const vatClean = String(req.body.vat || "")
+  .replace(/\s+/g, "")
+  .replace(/[^A-Za-z0-9]/g, "")
+  .toUpperCase();
+
+const countryClean = String(req.body.country || "").toUpperCase().trim();
+
+// als vat al begint met landcode (NL..., DE..., XI...), niet nog eens prefixen
+const vatNumber =
+  vatClean.startsWith(countryClean) ? vatClean : `${countryClean}${vatClean}`;
+
     const url = `https://api.vatcomply.com/vat?vat_number=${encodeURIComponent(vatNumber)}`;
     const r = await fetch(url);
 
