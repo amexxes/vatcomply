@@ -3,97 +3,87 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>VAT Validation</title>
+    <title>VAT validation</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 40px; max-width: 900px; }
-      textarea { width: 100%; height: 180px; padding: 10px; font-size: 14px; }
-      button { padding: 10px 14px; font-size: 14px; cursor: pointer; margin-top: 10px; }
-      pre { background: #f4f4f4; padding: 12px; border-radius: 8px; overflow: auto; }
-      .hint { color: #444; font-size: 13px; }
-    </style>
-  </head>
-  <body>
-    <h2>VAT validation (VATcomply)</h2>
+      :root{
+        --bg:#0b1020;
+        --card:#121a33;
+        --muted:#aab3d0;
+        --text:#e9edff;
+        --line:rgba(255,255,255,.10);
+        --accent:#6ea8fe;
+        --ok:#39d98a;
+        --bad:#ff6b6b;
+        --warn:#ffd166;
+      }
+      body{
+        margin:0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background: radial-gradient(1200px 700px at 20% 10%, #18214a 0%, var(--bg) 60%);
+        color:var(--text);
+      }
+      .wrap{ max-width:1100px; margin:32px auto; padding:0 18px; }
+      .card{
+        background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+        border:1px solid var(--line);
+        border-radius:16px;
+        box-shadow: 0 20px 50px rgba(0,0,0,.35);
+        padding:18px;
+      }
+      h1{ font-size:20px; margin:0 0 6px 0; letter-spacing:.2px; }
+      .hint{ margin:0 0 14px 0; color:var(--muted); font-size:13px; line-height:1.35; }
+      textarea{
+        width:100%;
+        min-height:140px;
+        resize:vertical;
+        padding:12px 12px;
+        border-radius:12px;
+        border:1px solid var(--line);
+        background: rgba(0,0,0,.25);
+        color:var(--text);
+        outline:none;
+        font-size:14px;
+      }
+      textarea:focus{ border-color: rgba(110,168,254,.55); box-shadow: 0 0 0 4px rgba(110,168,254,.12); }
 
-    <p class="hint">
-      Vul VAT-nummers in <b>met</b> country prefix. Elke regel = één VAT.<br/>
-      Voorbeelden: <code>NL002065538B01</code>, <code>EL094395030</code>, <code>DE123456789</code>, <code>XI123456789</code>
-    </p>
+      .controls{
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        align-items:center;
+        margin-top:12px;
+      }
+      .btn{
+        border:1px solid rgba(110,168,254,.35);
+        background: rgba(110,168,254,.14);
+        color: var(--text);
+        padding:10px 14px;
+        border-radius:12px;
+        cursor:pointer;
+        font-weight:600;
+      }
+      .btn:hover{ background: rgba(110,168,254,.20); }
+      .btn:disabled{ opacity:.55; cursor:not-allowed; }
 
-    <textarea id="vats" placeholder="NL002065538B01&#10;EL094395030"></textarea>
-    <br />
-    <button id="btn">Validate</button>
+      .field, select, input{
+        border:1px solid var(--line);
+        background: rgba(0,0,0,.25);
+        color: var(--text);
+        padding:9px 10px;
+        border-radius:12px;
+        outline:none;
+        font-size:13px;
+      }
+      input::placeholder{ color: rgba(233,237,255,.45); }
 
-<h3>Result</h3>
-<div id="result"></div>
+      .meta{
+        margin-left:auto;
+        display:flex;
+        gap:10px;
+        align-items:center;
+        color: var(--muted);
+        font-size:13px;
+      }
 
-
-<script>
-  const $ = (id) => document.getElementById(id);
-
-  function parseLines(text) {
-    return text
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l.length > 0);
-  }
-
-  function renderTable(data) {
-    if (!data.results || !data.results.length) {
-      $("result").innerHTML = "<p>No results</p>";
-      return;
-    }
-
-    const columns = [
-      "input",
-      "source",
-      "valid",
-      "vat_number",
-      "name",
-      "address",
-      "country_code",
-      "error",
-      "status"
-    ];
-
-    let html = "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse; font-size:13px;'>";
-    html += "<thead><tr>";
-
-    columns.forEach(col => {
-      html += `<th>${col}</th>`;
-    });
-
-    html += "</tr></thead><tbody>";
-
-    data.results.forEach(row => {
-      html += "<tr>";
-      columns.forEach(col => {
-        let value = row[col] ?? "";
-        if (typeof value === "boolean") value = value ? "true" : "false";
-        html += `<td>${value}</td>`;
-      });
-      html += "</tr>";
-    });
-
-    html += "</tbody></table>";
-
-    $("result").innerHTML = html;
-  }
-
-  async function validateBatch() {
-    const vat_numbers = parseLines($("vats").value);
-
-    const res = await fetch("/api/validate-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vat_numbers })
-    });
-
-    const data = await res.json().catch(() => ({}));
-    renderTable(data);
-  }
-
-  $("btn").addEventListener("click", validateBatch);
-</script>
-  </body>
-</html>
+      .progressWrap{
+        margin-top:12px;
